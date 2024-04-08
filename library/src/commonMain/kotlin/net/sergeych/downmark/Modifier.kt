@@ -1,16 +1,31 @@
 package net.sergeych.downmark
 
-internal class Modifier(vararg val tokens: String, val onChange: (Boolean) -> Unit) {
-
-    val active: Boolean get() = token != null
-
+/**
+ * User by parser to uniformly detect and parse style modifiers like `*italic*`, etc.
+ * It checks that the
+ */
+internal class Modifier(
+    /** list of tokens this modifier accepts.
+     */
+    private vararg val tokens: String,
     /**
-     * Currently active token or null. Note that if [active] is true, [token] is always
-     * not null.
+     * The handler called every time [token] value is changed. There is  handler [beforeChange]
+     * that, when set, will be called immediately before changing [token] value
+     */
+    val onChange: (Boolean) -> Unit,
+) {
+    /**
+     * Current active, detected token or null. It is alwaus null or one of [tokens]
      */
     var token: String? = null
         private set
 
+    /**
+     * Dynamically updatable handler that will invoke _before_ [token] will be changed. See
+     * its current value: if it is null, then it will be set to some non-null value, otherwise
+     * cleared to null.
+     * Note tha [onChange] will be changed _after_ it when [token] is set to new value.
+     */
     var beforeChange: (() -> Unit)? = null
 
     fun clear() {
@@ -23,14 +38,23 @@ internal class Modifier(vararg val tokens: String, val onChange: (Boolean) -> Un
         require(newToken != token)
         beforeChange?.invoke()
         token = newToken
-        onChange(active)
+        onChange(token != null)
     }
 
     /**
      * Check that current position is open/close token for the
-     * modifier, remove it if present and changes [active] and [token] accordingly
-     * and calls [beforeChange] then [onChange].
-     * @return null if state is not changed, otherwise true on start and false on end
+     * modifier.
+     * The current position is checked using Markdown rules to contain proper
+     * sequence before or after the token.
+     *
+     * If the token state change is detected, first [beforeChange] is called, then
+     * [token] is set or cleared to proper value and [onChange] is called with a new state.
+     *
+     * Important to know is that when [beforeChange] is called the state is not yet changed.
+     *
+     * @param src source to detect and extract tokens from/
+     * @return null if state is not changed, otherwise true on start, when [token] is set from null to
+     *      corresponding value, and false on end, when [token] is set to null.
      */
     fun check(src: CharSource): Boolean? {
         // Check that current pos matches any token
@@ -46,16 +70,14 @@ internal class Modifier(vararg val tokens: String, val onChange: (Boolean) -> Un
                     null
                 }
             } else {
-                if( t == token && src.current?.isLetterOrDigit() == false ) {
+                if (t == token && src.current?.isLetterOrDigit() == false) {
                     update(null)
                     false
-                }
-                else {
+                } else {
                     rewind()
                     null
                 }
             }
         }
     }
-
 }

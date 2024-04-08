@@ -1,12 +1,34 @@
 package net.sergeych.downmark
 
-
-class Parser(text: String) {
+/**
+ * Create a Markdown parser that will parse text and use optional
+ * external links resolver.
+ *
+ * @param text Markdown text to parse
+ * @param linkResolver callback to resolve external links.
+ */
+class Parser(
+    text: String,
+    /**
+     * Resolver of the links not completely defined in the document. Resolved s called
+     * when parser detects a link in form `[link_text]`, where
+     * `link_text` is not presented in footnote links (like `[text_link]: some_link_body`.
+     * The parser then calls linkResolver if present, and if it returns not null, parser
+     * creates [InlineItem.Link] with [Ref.link] and [Ref.title]  as returned by the parser,
+     * and [Ref.name] of `text_link`.
+     *
+     * If resolver returns null, parser will insert the link as a plain text.
+     *
+     * Link returned by the `linkResolver` should conform to Markdown link format, e.g. either
+     * `link_without_spaces` or `link_without_spaces "title"`.
+     */
+    @Suppress("KDocUnresolvedReference") private val linkResolver: (String) -> String? = { null },
+) {
 
     private val src = CharSource(text)
 
     private var _errors = mutableListOf<SyntaxError>()
-    val errors: List<SyntaxError> = _errors
+    private val errors: List<SyntaxError> = _errors
 
     private val footnotes = mutableMapOf<String, Ref>()
     private var listLevel = 0
@@ -22,10 +44,7 @@ class Parser(text: String) {
     private val mStrikeThrough = Modifier("~~") { strikeThrough = it }
     private val mSymbol = Modifier("`") { symbol = it }
 
-    private val allModifiers = arrayOf(mItalic, mBold, mBold, mSymbol, mSymbol)
-
-
-    val lines: List<String> = src.lines
+    private val allModifiers = arrayOf(mItalic, mBold, mMBoldItalic, mStrikeThrough, mSymbol)
 
     fun parse(): MarkdownDoc {
         scanReferences()
@@ -39,7 +58,7 @@ class Parser(text: String) {
     /**
      * First pass: detect all footnote references
      */
-    fun scanReferences() {
+    private fun scanReferences() {
         src.mark {
             while (!src.end) {
                 val name = src.readBracedInLine('[', ']')
@@ -53,7 +72,7 @@ class Parser(text: String) {
                     addError("malformed footnote")
                 } else {
                     val (link, title) = extractLinkAndTitle(s)
-                    footnotes[name] = Ref(name, link, title, true)
+                    footnotes[name] = Ref(name, link, title, Ref.Type.Footnote)
                 }
             }
             rewind()
@@ -111,7 +130,7 @@ class Parser(text: String) {
         }
     }
 
-    fun readCodeBlock(ending: String): BlockItem.Code =
+    private fun readCodeBlock(ending: String): BlockItem.Code =
         src.mark {
             val lang = src.readToEndOfLine()
             val acc = StringBuilder()
@@ -125,7 +144,7 @@ class Parser(text: String) {
         }
 
 
-    fun CharSource.Mark.addError(text: String) {
+    private fun CharSource.Mark.addError(text: String) {
         _errors += createError(text)
     }
 
@@ -171,15 +190,24 @@ class Parser(text: String) {
                 }
 
                 '-' -> { // dashes
-                    if (src.nextInLine() == '-') {
-                        src.advance(2)
-                        if (src.current == '-') {
-                            acc.append('\u2014')
-                            src.advance()
-                        } else {
-                            acc.append('\u2013')
-                            continue@loop
+                    val ch = src.mark {
+                        if (src.nextInLine() == '-') {
+                            src.advance(2)
+                            if (src.current == '-' && src.nextInLine()?.isWhitespace() == true) {
+                                src.advance()
+                                '\u2014'
+                            } else if( src.nextInLine()?.isWhitespace() == true)
+                                '\u2013'
+                            else {
+                                rewind()
+                                null
+                            }
                         }
+                        else null
+                    }
+                    if( ch != null ) {
+                        acc.append(ch)
+                        continue@loop
                     }
                 }
 
@@ -196,7 +224,6 @@ class Parser(text: String) {
             for (m in allModifiers)
                 if (m.check(src) != null) continue@loop
 
-            // todo: links
             // todo: images
 
             acc.append(src.current)
@@ -209,18 +236,18 @@ class Parser(text: String) {
     }
 
     /**
-     * Exctract ref from current position
+     * Extract ref from current position
      */
     private fun extractRef(): Ref? {
         return src.mark {
             src.readBracedInLine('[', ']')?.let { name ->
-                // could be a footnote or inline:
+                // could be a footnote, inline or even external:
                 when (src.current) {
                     '(' -> {
                         // inline
-                        src.readBracedInLine('(', ')')?.let {
-                            extractLinkAndTitle(it).let {
-                                Ref(name, it.first, it.second, false)
+                        src.readBracedInLine('(', ')')?.let { source ->
+                            extractLinkAndTitle(source).let {
+                                Ref(name, it.first, it.second, Ref.Type.Inline)
                             }
                         }
                     }
@@ -233,7 +260,11 @@ class Parser(text: String) {
                     }
 
                     else -> {
-                        footnotes[name] ?: run {
+                        footnotes[name] ?: linkResolver.invoke(name)
+                            ?.let { extractLinkAndTitle(it) }
+                            ?.let {
+                                Ref(name, it.first, it.second, Ref.Type.External)
+                            } ?: run {
                             rewind()
                             null
                         }
@@ -250,8 +281,8 @@ class Parser(text: String) {
      */
     private fun extractLinkAndTitle(s: String): Pair<String, String?> {
         val parts = s.split(' ')
-        var link: String
-        var title: String?
+        val link: String
+        val title: String?
         if (parts.size == 2 && parts[1][0] == '"' && parts[1].last() == '"') {
             link = parts[0]
             title = parts[1].let { it.slice(1..<it.length - 1) }

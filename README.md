@@ -1,6 +1,11 @@
 # Multiplatform markdown parser
 
-This is work in progress yet not suitable to any particular purpose
+This is a work in progress yet not suitable to any particular purpose.
+
+The goal is to provide all-platforms same simple code to parse markdown,
+provide mechanics to add domain-specific links support and to provide basic formatters to
+convert parsed markdown either back to markdown or to HTML and ANSI-colored text.
+
 
 ---------------------
 

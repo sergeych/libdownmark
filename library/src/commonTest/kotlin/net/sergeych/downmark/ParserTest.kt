@@ -33,6 +33,24 @@ class ParserTest {
     }
 
     @Test
+    fun testParseSimpleMultilineSpan() {
+        val r = MarkdownDoc("""hello, _the
+            |green world_!""".trimMargin())
+        println(r.body)
+        println(r.errors)
+        assertTrue {  r.errors.isEmpty() }
+        assertEquals("hello, ",
+            ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).text
+        )
+        assertEquals("Text(I:the green world)",
+            ((r.body.first() as BlockItem.Paragraph).content[1] as InlineItem.Text).toString()
+        )
+        assertEquals("! ",
+            ((r.body.first() as BlockItem.Paragraph).content[2] as InlineItem.Text).text
+        )
+    }
+
+    @Test
     fun codeBlockTest() {
         val d = MarkdownDoc("""
             ~~~kt

@@ -6,6 +6,8 @@ The goal is to provide all-platforms same simple code to parse markdown,
 provide mechanics to add domain-specific links support and to provide basic formatters to
 convert parsed markdown either back to markdown or to HTML and ANSI-colored text.
 
+Let's _experiment
+with_ the markdown.
 
 ---------------------
 

@@ -175,6 +175,7 @@ class Parser(
 
             if (src.eol) {
                 src.advance()
+                acc.append(' ')
                 if (src.isBlankLine()) break
             }
 

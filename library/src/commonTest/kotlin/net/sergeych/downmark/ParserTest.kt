@@ -45,7 +45,7 @@ class ParserTest {
         assertEquals("Text(I:the green world)",
             ((r.body.first() as BlockItem.Paragraph).content[1] as InlineItem.Text).toString()
         )
-        assertEquals("! ",
+        assertEquals("!",
             ((r.body.first() as BlockItem.Paragraph).content[2] as InlineItem.Text).text
         )
     }

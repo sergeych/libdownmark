@@ -1,6 +1,6 @@
 package net.sergeych.downmark
 
-class CharSource(val text: String) {
+class CharSource(text: String) {
 
     inner class Mark() {
         val resetPos = pos()
@@ -27,18 +27,18 @@ class CharSource(val text: String) {
     var col = 0
         private set
 
-    fun pos(): Pos = Pos(row, col)
+    fun pos(): Pos = makePos(row, col)
 
-    fun back(steps: Int = 1) {
-        for (i in 0..steps) {
-            if (col == 0) {
-                if (row == 0) throw IndexOutOfBoundsException("back below first character")
-                row--
-                col = lines[row].length
-            }
-        }
-        sync()
-    }
+//    fun back(steps: Int = 1) {
+//        for (i in 0..steps) {
+//            if (col == 0) {
+//                if (row == 0) throw IndexOutOfBoundsException("back below first character")
+//                row--
+//                col = lines[row].length
+//            }
+//        }
+//        sync()
+//    }
 
     fun resetTo(p: Pos) {
         val cp = pos()
@@ -188,6 +188,23 @@ class CharSource(val text: String) {
      */
     fun nextInLine(): Char? = if (col + 1 >= currentLine.length) null else currentLine[col + 1]
 
+    private val lineSize: List<Int> by lazy { lines.map { it.length} }
+
+    private val offsetOfLine: List<Int> by lazy {
+        var offset = 0
+        val result = ArrayList<Int>(lineSize.size)
+
+        for( s in lineSize ) {
+            result.add(offset)
+            offset += s
+        }
+        result.add(offset)
+        result
+    }
+
+    fun makePos(r: Int,c: Int): Pos =
+        Pos(r, c, offsetOfLine[r] + c )
+
 
     /**
      * Find the first occurrence ot the pattern inside a block (in markdown sense). Does not
@@ -199,7 +216,7 @@ class CharSource(val text: String) {
         var r = row
         do {
             val i = lines[r].indexOf(pattern, offset)
-            if (i >= 0) return Pos(r, i)
+            if (i >= 0) return makePos(r, i)
             r++
             offset = 0
             if (r < lines.size) {
@@ -237,8 +254,6 @@ class CharSource(val text: String) {
         }
     }
 
-    fun clone() = CharSource(text)
-
     init {
         if (text.isEmpty())
             throw IllegalArgumentException("can't create CharSource on empty line")
@@ -247,7 +262,6 @@ class CharSource(val text: String) {
 
     companion object {
         val spaces = " \t".toSet()
-        val multilineSpaces = spaces + '\n'
     }
 
 }

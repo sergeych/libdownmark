@@ -159,12 +159,16 @@ class Parser(
         val acc = StringBuilder()
         val result = mutableListOf<InlineItem>()
 
-        fun flush() {
+        fun flush(trimLastSpace: Boolean=false) {
             if (acc.isNotEmpty()) {
+                val text = acc.toString().let {
+                    if( trimLastSpace ) it.trimEnd()
+                    else it
+                }
                 result += if (symbol)
-                    InlineItem.Code(acc.toString())
+                    InlineItem.Code(text)
                 else
-                    InlineItem.Text(acc.toString(), bold, italic, strikeThrough)
+                    InlineItem.Text(text, bold, italic, strikeThrough)
                 acc.clear()
             }
         }
@@ -230,7 +234,7 @@ class Parser(
             acc.append(src.current)
             src.advance()
         }
-        flush()
+        flush(trimLastSpace = true)
         // free closures stored in modifiers:
         clearStyleModifiers()
         return result

@@ -21,6 +21,7 @@ interface ColoredConsole {
             is NotApplied -> this
         }
 
+        @Suppress("unused")
         val bright: Style get() = when (this){
             is Simple -> if (code.isNormalColor) copy(code = code + BRIGHT_SHIFT) else this
             is Composite -> if (parent is Simple && parent.code.isNormalColor)
@@ -278,6 +279,7 @@ fun <R> colored(enabled: Boolean = true, block: ColoredConsole.() -> R): R {
     return if (enabled) object : ColoredConsole {}.block() else object : ColorConsoleDisabled {}.block()
 }
 
+@Suppress("unused")
 fun <R : Style> style(block: ColoredConsole.() -> R): R = object : ColoredConsole {}.block()
 
 @Suppress("unused")

@@ -72,13 +72,32 @@ class CharSource(text: String) {
     }
 
     fun advance(steps: Int = 1) {
-        for (i in 0..<steps) {
-            if (end) throw IndexOutOfBoundsException("advance past the end")
-            if (current == '\n') {
-                row++
-                col = 0
-                if (row >= lines.size) end = true
-            } else col++
+        val dir: Int
+        val limit: Int
+        if (steps > 0) {
+            dir = 1
+            limit = steps
+        } else {
+            dir = -1
+            limit = -steps
+        }
+
+
+        for (i in 0..<limit) {
+            if (dir > 0) {
+                if (end) throw IndexOutOfBoundsException("advance past the end")
+                if (current == '\n') {
+                    row++
+                    col = 0
+                    if (row >= lines.size) end = true
+                } else col++
+            } else {
+                if (col == 0) {
+                    if (row == 0) throw IndexOutOfBoundsException("advance back before the start")
+                    col = lines[--row].length
+                }
+                else col--
+            }
         }
         sync()
     }
@@ -195,13 +214,13 @@ class CharSource(text: String) {
      */
     fun nextInLine(): Char? = if (col + 1 >= currentLine.length) null else currentLine[col + 1]
 
-    private val lineSize: List<Int> by lazy { lines.map { it.length} }
+    private val lineSize: List<Int> by lazy { lines.map { it.length + 1 } }
 
     private val offsetOfLine: List<Int> by lazy {
         var offset = 0
         val result = ArrayList<Int>(lineSize.size)
 
-        for( s in lineSize ) {
+        for (s in lineSize) {
             result.add(offset)
             offset += s
         }
@@ -209,8 +228,8 @@ class CharSource(text: String) {
         result
     }
 
-    fun makePos(r: Int,c: Int): Pos =
-        Pos(r, c, offsetOfLine[r] + c )
+    fun makePos(r: Int, c: Int): Pos =
+        Pos(r, c, offsetOfLine[r] + c)
 
 
     /**
@@ -227,7 +246,7 @@ class CharSource(text: String) {
             r++
             offset = 0
             if (r < lines.size) {
-                if (lines[r][0].isWhitespace())
+                if (lines[r].isEmpty() || lines[r][0].isWhitespace())
                     break
             } else break
         } while (true)
@@ -242,17 +261,17 @@ class CharSource(text: String) {
      * @return found string or null
      */
     fun readBracedInLine(open: Char, close: Char, favorEscapes: Char? = '\\'): String? {
-        if( current != open ) return null
+        if (current != open) return null
         return mark {
-            val c0 = col+1
-            while(true) {
+            val c0 = col + 1
+            while (true) {
                 advance()
-                if( eol ) break
-                if( favorEscapes == current && nextInLine() == close ) {
+                if (eol) break
+                if (favorEscapes == current && nextInLine() == close) {
                     advance()
                     continue
                 }
-                if( current == close ) {
+                if (current == close) {
                     return@mark currentLine.substring(c0, col).also { advance() }
                 }
             }

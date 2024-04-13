@@ -1,8 +1,14 @@
 package net.sergeych.downmark
 
 class MarkdownDoc internal constructor(
+    val text: String,
     val body: List<BlockItem>,
     val errors: List<SyntaxError>) {
+
+    @Suppress("unused")
+    val markupItems: List<MarkupItem> by lazy {
+        body + body.map { it.content }.flatten()
+    }
 
     /**
      * Get a block of expected type. Throws exception if the block type is different,

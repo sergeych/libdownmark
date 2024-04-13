@@ -20,6 +20,10 @@ internal class Modifier(
     var token: String? = null
         private set
 
+    var currentTokenLength: Int = 0
+        private set
+
+
     /**
      * Dynamically updatable handler that will invoke _before_ [token] will be changed. See
      * its current value: if it is null, then it will be set to some non-null value, otherwise
@@ -27,6 +31,7 @@ internal class Modifier(
      * Note tha [onChange] will be changed _after_ it when [token] is set to new value.
      */
     var beforeChange: (() -> Unit)? = null
+    var afterChange: (() -> Unit)? = null
 
     fun clear() {
         token = null
@@ -34,11 +39,17 @@ internal class Modifier(
         beforeChange = null
     }
 
-    private fun update(newToken: String?) {
+    private fun update(src: CharSource, newToken: String?) {
         require(newToken != token)
-        beforeChange?.invoke()
+        currentTokenLength = (newToken ?: token)?.length ?: 0
+        src.mark {
+            src.advance(-currentTokenLength)
+            beforeChange?.invoke()
+            rewind()
+        }
         token = newToken
         onChange(token != null)
+        afterChange?.invoke()
     }
 
     /**
@@ -63,7 +74,7 @@ internal class Modifier(
             val t = src.expectAny(*tokens) ?: return@mark null
             if (token == null) {
                 if (src.findInBlock(t) != null && prevChar?.isLetterOrDigit() != true) {
-                    update(t)
+                    update(src, t)
                     true
                 } else {
                     rewind()
@@ -71,7 +82,7 @@ internal class Modifier(
                 }
             } else {
                 if (t == token && src.current?.isLetterOrDigit() == false) {
-                    update(null)
+                    update(src, null)
                     false
                 } else {
                     rewind()

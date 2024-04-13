@@ -10,13 +10,15 @@ class ParserTest {
         println(r.body)
         assertTrue {  r.errors.isEmpty() }
         assertEquals(1, r.body.size )
-        assertEquals("hello, world!",
+        assertEquals("hello, world! ",
             ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).text
         )
     }
 
     @Test
     fun testParseSimple2() {
+        //                        0         1
+        //                        012345678901234
         val r = MarkdownDoc("hello, _world_!")
         println(r.body)
         println(r.errors)
@@ -24,10 +26,78 @@ class ParserTest {
         assertEquals("hello, ",
             ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).text
         )
-        assertEquals("Text(I:world)",
+        assertEquals(Pos(0,0,0)..<Pos(0,7,7),
+            ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).placement.body
+        )
+        val itext1 = ((r.body.first() as BlockItem.Paragraph).content[1] as InlineItem.Text)
+        assertEquals("Text(I:world)", itext1.toString())
+        assertEquals(Pos(0,8,8)..<Pos(0,13,13), itext1.placement.body)
+
+
+        val p = itext1.placement
+
+        println(p.markups)
+        assertEquals(p.markups[0], Pos(0,7, 7) ..< Pos(0,8,8))
+        assertEquals(p.markups[1], Pos(0,13, 13) ..< Pos(0,14,14))
+
+        assertEquals(Pos(0, 8, 8),p.body!!.start)
+        assertEquals("! ",
+            ((r.body.first() as BlockItem.Paragraph).content[2] as InlineItem.Text).text
+        )
+    }
+
+    @Test
+    fun testParseSimple2l() {
+        //                        0         1
+        //                        012345678901234
+        val r = MarkdownDoc("""
+            123
+            hello, _world_!""".trimIndent())
+        println(r.body)
+        println(r.errors)
+        assertTrue {  r.errors.isEmpty() }
+        assertEquals("123 hello, ",
+            ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).text
+        )
+        assertEquals(Pos(0,0,0)..<Pos(1,7,11),
+            ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).placement.body
+        )
+//        val itext1 = ((r.body.first() as BlockItem.Paragraph).content[1] as InlineItem.Text)
+//        assertEquals("Text(I:world)", itext1.toString())
+//        assertEquals(Pos(0,8,8)..<Pos(0,13,13), itext1.placement.body)
+//
+//
+//        val p = itext1.placement
+//
+//        println(p.markups)
+//        assertEquals(p.markups[0], Pos(0,7, 7) ..< Pos(0,8,8))
+//        assertEquals(p.markups[1], Pos(0,13, 13) ..< Pos(0,14,14))
+//
+//        assertEquals(Pos(0, 8, 8),p.body!!.start)
+    }
+
+    @Test
+    fun testParseSimple2a() {
+        // should not throw:
+        MarkdownDoc("""
+            To _be 
+            
+            """.trimIndent())
+    }
+
+    @Test
+    fun testParseSimple2b() {
+        val r = MarkdownDoc("hello, __world__!")
+        println(r.body)
+        println(r.errors)
+        assertTrue {  r.errors.isEmpty() }
+        assertEquals("hello, ",
+            ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).text
+        )
+        assertEquals("Text(B:world)",
             ((r.body.first() as BlockItem.Paragraph).content[1] as InlineItem.Text).toString()
         )
-        assertEquals("!",
+        assertEquals("! ",
             ((r.body.first() as BlockItem.Paragraph).content[2] as InlineItem.Text).text
         )
     }
@@ -45,7 +115,7 @@ class ParserTest {
         assertEquals("Text(I:the green world)",
             ((r.body.first() as BlockItem.Paragraph).content[1] as InlineItem.Text).toString()
         )
-        assertEquals("!",
+        assertEquals("! ",
             ((r.body.first() as BlockItem.Paragraph).content[2] as InlineItem.Text).text
         )
     }
@@ -73,14 +143,14 @@ class ParserTest {
             
             ## this is _a h2_
         """.trimIndent())
-        assertEquals("This is h1",
+        assertEquals("This is h1 ",
             d.blockAt<BlockItem.Heading>(0).content.itemAt<InlineItem.Text>(0).text)
         println("d2: ${d.body[1]}")
         val cc = d.blockAt<BlockItem.Heading>(1).content
         assertEquals("this is ", cc.itemAt<InlineItem.Text>(0).text)
         val c2 = cc.itemAt<InlineItem.Text>(1)
         assertEquals("a h2", c2.text)
-        assertTrue { c2.italics }
+        assertTrue { c2.italic }
     }
 
     @Test

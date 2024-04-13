@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "libdownmark"
-include(":library")
+include(":libdownmark")

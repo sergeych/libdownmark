@@ -8,7 +8,7 @@ package net.sergeych.downmark
  * @param linkResolver callback to resolve external links.
  */
 class Parser(
-    text: String,
+    val text: String,
     /**
      * Resolver of the links not completely defined in the document. Resolved s called
      * when parser detects a link in form `[link_text]`, where
@@ -38,21 +38,26 @@ class Parser(
     private var strikeThrough = false
     private var symbol = false
 
-    private val mItalic = Modifier("_", "*") { italic = it; addRange(this) }
-    private val mBold = Modifier("__", "**") { bold = it; addRange(this) }
-    private val mMBoldItalic = Modifier("___", "***") { bold = it; italic = it; addRange(this) }
-    private val mStrikeThrough = Modifier("~~") { strikeThrough = it; addRange(this) }
-    private val mSymbol = Modifier("`") { symbol = it; addRange(this) }
+    private val mItalic = Modifier("_", "*") { italic = it }
+    private val mBold = Modifier("__", "**") { bold = it }
+    private val mMBoldItalic = Modifier("___", "***") { bold = it; italic = it }
+    private val mStrikeThrough = Modifier("~~") { strikeThrough = it }
+    private val mSymbol = Modifier("`") { symbol = it }
 
-    private val markupRanges = mutableListOf<SourceRange>()
-    private val allModifiers = arrayOf(mItalic, mBold, mMBoldItalic, mStrikeThrough, mSymbol)
+    private val markupRanges = mutableListOf<OpenEndRange<Pos>>()
 
+    // Keep the proper order -- it is important!
+    private val allModifiers = arrayOf(mMBoldItalic, mBold, mItalic, mStrikeThrough, mSymbol)
+
+    /**
+     * Important! __it could only be used for tokens conained in a line, tokens spanned
+     * across multiple lines will not work!_ (it's easy to update, but markdown does not
+     * have any).
+     */
     private fun addRange(m: Modifier) {
-        m.token?.length?.let { l ->
-            if (l > 0) {
-                val pos = src.pos()
-                markupRanges += src.makePos(pos.row, pos.col - l)..<pos
-            }
+        if (m.currentTokenLength > 0) {
+            val pos = src.pos()
+            markupRanges += pos ..< src.makePos(pos.row, pos.col + m.currentTokenLength)
         }
     }
 
@@ -62,31 +67,29 @@ class Parser(
         while (true) {
             parseBlock(src)?.let { result += it } ?: break
         }
-        return MarkdownDoc(result, errors)
+        return MarkdownDoc(text, result, errors)
     }
 
     /**
      * First pass: detect all footnote references
      */
-    private fun scanReferences() {
-        src.mark {
-            while (!src.end) {
-                val name = src.readBracedInLine('[', ']')
-                if (name == null || src.current != ':') {
-                    src.skipLine(); continue
-                }
-                src.advance()
-                src.skipWs()
-                val s = src.readToEndOfLine()
-                if (s.isBlank()) {
-                    addError("malformed footnote")
-                } else {
-                    val (link, title) = extractLinkAndTitle(s)
-                    footnotes[name] = Ref(name, link, title, Ref.Type.Footnote)
-                }
+    private fun scanReferences() = src.mark {
+        while (!src.end) {
+            val name = src.readBracedInLine('[', ']')
+            if (name == null || src.current != ':') {
+                src.skipLine(); continue
             }
-            rewind()
+            src.advance()
+            src.skipWs()
+            val s = src.readToEndOfLine()
+            if (s.isBlank()) {
+                addError("malformed footnote")
+            } else {
+                val (link, title) = extractLinkAndTitle(s)
+                footnotes[name] = Ref(name, link, title, Ref.Type.Footnote)
+            }
         }
+        rewind()
     }
 
     private fun parseBlock(src: CharSource): BlockItem? {
@@ -163,7 +166,7 @@ class Parser(
             val mup1 = start..<bodyStart
             var ok = true
             val acc = StringBuilder()
-            var mup2: SourceRange? = null
+            var mup2: OpenEndRange<Pos>? = null
             do {
                 val p0 = src.pos()
                 val line = src.readToEndOfLine()
@@ -199,21 +202,18 @@ class Parser(
         allModifiers.forEach { it.clear() }
     }
 
-    private fun parseContent(): Content {
-        var start = src.pos()
 
+    private fun parseContent(): List<InlineItem> {
+        var start = src.pos()
         clearStyleModifiers()
         markupRanges.clear()
 
         val acc = StringBuilder()
         val result = mutableListOf<InlineItem>()
 
-        fun flush(trimLastSpace: Boolean = false) {
+        fun flush() {
             if (acc.isNotEmpty()) {
-                val text = acc.toString().let {
-                    if (trimLastSpace) it.trimEnd()
-                    else it
-                }
+                val text = acc.toString()
                 val p = MarkupPlacement(markupRanges.toList(), start..<src.pos())
                 result += if (symbol)
                     InlineItem.Code(text, p)
@@ -227,8 +227,19 @@ class Parser(
 
         allModifiers.forEach {
             it.beforeChange = {
-                flush()
-                addRange(it)
+                if (it.token == null) {
+                    // in the beginning: flush existing accumulator
+                    flush()
+                    addRange(it)
+                } else {
+                    // in the end: add the range and flush
+                    addRange(it)
+                    flush()
+                }
+                start = src.pos()
+            }
+            it.afterChange = {
+                start = src.pos()
             }
         }
 
@@ -275,9 +286,12 @@ class Parser(
                 '[' -> {
                     val r = extractRef()
                     if (r != null) {
-                        // todo: why flush? remove?
+                        // if the ref was actually extracted, flush the acc;
+                        // it could be filled with plain text, but only if the
+                        // valid ref was extracted:
                         flush()
-                        result += InlineItem.Link(r,
+                        result += InlineItem.Link(
+                            r,
                             MarkupPlacement(listOf(), start..<src.pos())
                         )
                         start = src.pos()
@@ -288,7 +302,7 @@ class Parser(
 
             for (m in allModifiers)
                 if (m.check(src) != null) {
-                    if( m.token == null )
+                    if (m.token == null)
                         start = src.pos()
                     continue@loop
                 }
@@ -298,7 +312,7 @@ class Parser(
             acc.append(src.current)
             src.advance()
         }
-        flush(trimLastSpace = true)
+        flush()
         // free closures stored in modifiers:
         clearStyleModifiers()
         return result

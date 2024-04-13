@@ -15,7 +15,7 @@ with_ the markdown.
 
 ## What is it?
 
-It is the barebones library project intended to quickly bootstrap a Kotlin Multiplatform library, that is deployable to Maven Central.
+It is the barebones library [README.md](README.md)project intended to quickly bootstrap a Kotlin Multiplatform library, that is deployable to Maven Central.
 
 It has only one function: generate the [Fibonacci sequence](https://en.wikipedia.org/wiki/Fibonacci_sequence) starting from platform-provided numbers. Also, it has a test for each platform just to be sure that tests run.
 

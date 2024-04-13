@@ -5,7 +5,7 @@ sealed class InlineItem: MarkupItem {
     data class Text(
         val text: String,
         val bold: Boolean = false,
-        val italics: Boolean = false,
+        val italic: Boolean = false,
         val strikeThrough: Boolean = false,
         override val placement: MarkupPlacement
     ): InlineItem() {
@@ -13,7 +13,7 @@ sealed class InlineItem: MarkupItem {
         override fun toString(): String {
             val fmt = StringBuilder()
             if(bold) fmt.append('B')
-            if(italics) fmt.append('I')
+            if(italic) fmt.append('I')
             if( fmt.isNotEmpty() ) fmt.append(':')
             return "Text($fmt$text)"
         }

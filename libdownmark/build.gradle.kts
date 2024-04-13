@@ -19,7 +19,7 @@ kotlin {
     js {
         // To build distributions for and run tests on browser or Node.js use one or both of:
         browser()
-//        nodejs()
+        nodejs()
     }
     iosX64()
     iosArm64()
@@ -27,6 +27,7 @@ kotlin {
     macosX64()
     macosArm64()
     linuxX64()
+//    wasmJs()
 
     sourceSets {
         val commonMain by getting {

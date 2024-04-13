@@ -3,8 +3,8 @@ plugins {
 }
 
 allprojects {
-    group = "net.sergeych.libdownmark"
-    version = "0.0.1"
+    group = "net.sergeych"
+    version = "0.0.1-SNAPSHOT"
 }
 
 nexusPublishing {

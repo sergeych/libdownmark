@@ -92,7 +92,7 @@ class ParserTest {
 
             ## this is _a h2_
         """.trimIndent())
-        assertEquals(BlockItem.HorizontalLine, d.body[1])
+        assertIs<BlockItem.HorizontalLine>(d.body[1])
     }
 
     @Test

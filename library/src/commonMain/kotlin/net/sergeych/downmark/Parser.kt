@@ -38,13 +38,23 @@ class Parser(
     private var strikeThrough = false
     private var symbol = false
 
-    private val mItalic = Modifier("_", "*") { italic = it }
-    private val mBold = Modifier("__", "**") { bold = it }
-    private val mMBoldItalic = Modifier("___", "***") { bold = it; italic = it }
-    private val mStrikeThrough = Modifier("~~") { strikeThrough = it }
-    private val mSymbol = Modifier("`") { symbol = it }
+    private val mItalic = Modifier("_", "*") { italic = it; addRange(this) }
+    private val mBold = Modifier("__", "**") { bold = it; addRange(this) }
+    private val mMBoldItalic = Modifier("___", "***") { bold = it; italic = it; addRange(this) }
+    private val mStrikeThrough = Modifier("~~") { strikeThrough = it; addRange(this) }
+    private val mSymbol = Modifier("`") { symbol = it; addRange(this) }
 
+    private val markupRanges = mutableListOf<SourceRange>()
     private val allModifiers = arrayOf(mItalic, mBold, mMBoldItalic, mStrikeThrough, mSymbol)
+
+    private fun addRange(m: Modifier) {
+        m.token?.length?.let { l ->
+            if (l > 0) {
+                val pos = src.pos()
+                markupRanges += src.makePos(pos.row, pos.col - l)..<pos
+            }
+        }
+    }
 
     fun parse(): MarkdownDoc {
         scanReferences()
@@ -81,6 +91,8 @@ class Parser(
 
     private fun parseBlock(src: CharSource): BlockItem? {
 
+        val start = src.pos()
+
         while (src.isBlankLine() && !src.end) src.skipLine()
         if (src.end) return null
 
@@ -88,7 +100,15 @@ class Parser(
 
         if (src.current == '#') {
             src.expectAny(*headings)?.let {
-                return BlockItem.Heading(it.length - 1, parseContent())
+                val bodyStart = src.pos()
+                val mup = start..<bodyStart
+                return BlockItem.Heading(
+                    it.length - 1, parseContent(),
+                    MarkupPlacement(
+                        listOf(mup),
+                        bodyStart..<src.pos()
+                    )
+                )
             }
         }
 
@@ -96,7 +116,7 @@ class Parser(
 
         if (src.current == '~' || src.current == '`') {
             src.expectAny("~~~", "```")?.let {
-                return readCodeBlock(it)
+                readCodeBlock(start, it)?.let { return it }
             }
         }
 
@@ -112,35 +132,61 @@ class Parser(
                     false
                 }
             }
-            if (found) return BlockItem.HorizontalLine
-
+            if (found)
+                return BlockItem.HorizontalLine(MarkupPlacement(listOf(start..<src.pos()), null))
             // todo: dashed list level 0
         }
 
+        // by now it should be just indented or plain text
         return when (src.current) {
             ' ', '\t' -> {
                 src.skipWs()
                 BlockItem.Paragraph(
                     if (listLevel > 0) listLevel else 1,
-                    parseContent()
+                    parseContent(),
+                    MarkupPlacement(listOf(), start..<src.pos())
                 )
             }
 
-            else -> BlockItem.Paragraph(0, parseContent())
+            else -> BlockItem.Paragraph(
+                0,
+                parseContent(),
+                MarkupPlacement(listOf(), start..<src.pos())
+            )
         }
     }
 
-    private fun readCodeBlock(ending: String): BlockItem.Code =
+    private fun readCodeBlock(start: Pos, ending: String): BlockItem.Code? =
         src.mark {
             val lang = src.readToEndOfLine()
+            val bodyStart = src.pos()
+            val mup1 = start..<bodyStart
+            var ok = true
             val acc = StringBuilder()
+            var mup2: SourceRange? = null
             do {
+                val p0 = src.pos()
                 val line = src.readToEndOfLine()
-                if (line == ending) break
+                if (line.trimEnd() == ending) {
+                    mup2 = p0..<src.pos()
+                    break
+                }
                 acc.appendLine(line)
-                if (src.end) addError("unterminated block $ending")
+                if (src.end) {
+                    addError("unterminated block $ending")
+                    rewind()
+                    ok = false
+                    break
+                }
             } while (!src.end)
-            BlockItem.Code(acc.toString(), lang)
+            if (ok)
+                BlockItem.Code(
+                    acc.toString(), lang, MarkupPlacement(
+                        listOf(mup1, mup2!!),
+                        bodyStart..<mup2.start
+                    )
+                )
+            else null
         }
 
 
@@ -154,26 +200,37 @@ class Parser(
     }
 
     private fun parseContent(): Content {
+        var start = src.pos()
+
         clearStyleModifiers()
+        markupRanges.clear()
 
         val acc = StringBuilder()
         val result = mutableListOf<InlineItem>()
 
-        fun flush(trimLastSpace: Boolean=false) {
+        fun flush(trimLastSpace: Boolean = false) {
             if (acc.isNotEmpty()) {
                 val text = acc.toString().let {
-                    if( trimLastSpace ) it.trimEnd()
+                    if (trimLastSpace) it.trimEnd()
                     else it
                 }
+                val p = MarkupPlacement(markupRanges.toList(), start..<src.pos())
                 result += if (symbol)
-                    InlineItem.Code(text)
+                    InlineItem.Code(text, p)
                 else
-                    InlineItem.Text(text, bold, italic, strikeThrough)
+                    InlineItem.Text(text, bold, italic, strikeThrough, p)
+
                 acc.clear()
+                markupRanges.clear()
             }
         }
 
-        allModifiers.forEach { it.beforeChange = { flush() } }
+        allModifiers.forEach {
+            it.beforeChange = {
+                flush()
+                addRange(it)
+            }
+        }
 
         loop@ while (!src.end) {
 
@@ -201,16 +258,15 @@ class Parser(
                             if (src.current == '-' && src.nextInLine()?.isWhitespace() == true) {
                                 src.advance()
                                 '\u2014'
-                            } else if( src.nextInLine()?.isWhitespace() == true)
+                            } else if (src.nextInLine()?.isWhitespace() == true)
                                 '\u2013'
                             else {
                                 rewind()
                                 null
                             }
-                        }
-                        else null
+                        } else null
                     }
-                    if( ch != null ) {
+                    if (ch != null) {
                         acc.append(ch)
                         continue@loop
                     }
@@ -219,15 +275,23 @@ class Parser(
                 '[' -> {
                     val r = extractRef()
                     if (r != null) {
+                        // todo: why flush? remove?
                         flush()
-                        result += InlineItem.Link(r)
+                        result += InlineItem.Link(r,
+                            MarkupPlacement(listOf(), start..<src.pos())
+                        )
+                        start = src.pos()
                         continue@loop
                     }
                 }
             }
 
             for (m in allModifiers)
-                if (m.check(src) != null) continue@loop
+                if (m.check(src) != null) {
+                    if( m.token == null )
+                        start = src.pos()
+                    continue@loop
+                }
 
             // todo: images
 

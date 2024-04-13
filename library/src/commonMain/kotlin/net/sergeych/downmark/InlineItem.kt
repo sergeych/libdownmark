@@ -1,12 +1,13 @@
 package net.sergeych.downmark
 
-sealed class InlineItem {
+sealed class InlineItem: MarkupItem {
 
     data class Text(
         val text: String,
         val bold: Boolean = false,
         val italics: Boolean = false,
-        val strikeThrough: Boolean = false
+        val strikeThrough: Boolean = false,
+        override val placement: MarkupPlacement
     ): InlineItem() {
 
         override fun toString(): String {
@@ -18,11 +19,9 @@ sealed class InlineItem {
         }
     }
 
-    data class Code(
-        val text: String
-    ): InlineItem()
+    data class Code(val text: String, override val placement: MarkupPlacement): InlineItem()
 
-    data class Link(val ref: Ref): InlineItem()
+    data class Link(val ref: Ref, override val placement: MarkupPlacement): InlineItem()
 
-    data class Image(val ref: Ref): InlineItem()
+    data class Image(val ref: Ref, override val placement: MarkupPlacement): InlineItem()
 }

@@ -12,7 +12,7 @@ internal class Modifier(
      * The handler called every time [token] value is changed. There is  handler [beforeChange]
      * that, when set, will be called immediately before changing [token] value
      */
-    val onChange: (Boolean) -> Unit,
+    val onChange: Modifier.(Boolean) -> Unit,
 ) {
     /**
      * Current active, detected token or null. It is alwaus null or one of [tokens]

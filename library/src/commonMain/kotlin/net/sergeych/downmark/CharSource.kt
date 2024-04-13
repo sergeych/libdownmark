@@ -27,7 +27,12 @@ class CharSource(text: String) {
     var col = 0
         private set
 
-    fun pos(): Pos = makePos(row, col)
+    private var _currentPos: Pos? = null
+
+    fun pos(): Pos {
+        _currentPos?.let { return it }
+        return makePos(row, col).also { _currentPos = it }
+    }
 
 //    fun back(steps: Int = 1) {
 //        for (i in 0..steps) {
@@ -39,6 +44,7 @@ class CharSource(text: String) {
 //        }
 //        sync()
 //    }
+
 
     fun resetTo(p: Pos) {
         val cp = pos()
@@ -78,6 +84,7 @@ class CharSource(text: String) {
     }
 
     private fun sync() {
+        _currentPos = null
         end = row >= lines.size
         if (end)
             current = null

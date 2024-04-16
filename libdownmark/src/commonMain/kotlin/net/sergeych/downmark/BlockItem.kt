@@ -20,11 +20,12 @@ sealed class BlockItem : MarkupItem {
         override val placement: MarkupPlacement
     ) : BlockItem()
 
-    enum class ListType { Dashed, Bulleted, Numbered }
+    enum class ListType { Dashed, Bulleted, Ordered }
 
     class ListItem(
         val type: ListType,
         val level: Int,
+        val number: Int?=null,
         override val content: List<InlineItem>,
         override val placement: MarkupPlacement,
     ) : BlockItem()

@@ -15,6 +15,7 @@ data class Ref(
     val link: String,
     val title: String? = null,
     val type: Type,
+    val placement: MarkupPlacement
 ) {
     /**
      * Link types, to properly convert back to Markdown or other formats, see

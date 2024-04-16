@@ -21,7 +21,7 @@ sealed class InlineItem: MarkupItem {
 
     data class Code(val text: String, override val placement: MarkupPlacement): InlineItem()
 
-    data class Link(val ref: Ref, override val placement: MarkupPlacement): InlineItem()
+    data class Link(val ref: Ref, override val placement: MarkupPlacement = ref.placement): InlineItem()
 
     data class Image(val ref: Ref, override val placement: MarkupPlacement): InlineItem()
 }

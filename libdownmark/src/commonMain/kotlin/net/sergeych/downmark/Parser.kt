@@ -9,6 +9,7 @@ package net.sergeych.downmark
  */
 class Parser(
     val text: String,
+    val tabSize: Int = 4,
     /**
      * Resolver of the links not completely defined in the document. Resolved s called
      * when parser detects a link in form `[link_text]`, where
@@ -25,13 +26,13 @@ class Parser(
     @Suppress("KDocUnresolvedReference") private val linkResolver: (String) -> String? = { null },
 ) {
 
+    private var lastBlock: BlockItem? = null
     private val src = CharSource(text)
 
     private var _errors = mutableListOf<SyntaxError>()
     private val errors: List<SyntaxError> = _errors
 
     private val footnotes = mutableMapOf<String, Ref>()
-    private var listLevel = 0
 
     private var italic = false
     private var bold = false
@@ -57,7 +58,7 @@ class Parser(
     private fun addRange(m: Modifier) {
         if (m.currentTokenLength > 0) {
             val pos = src.pos()
-            markupRanges += pos ..< src.makePos(pos.row, pos.col + m.currentTokenLength)
+            markupRanges += pos..<src.posAt(pos.row, pos.col + m.currentTokenLength)
         }
     }
 
@@ -75,28 +76,35 @@ class Parser(
      */
     private fun scanReferences() = src.mark {
         while (!src.end) {
+            val lineStart = src.pos()
             val name = src.readBracedInLine('[', ']')
             if (name == null || src.current != ':') {
                 src.skipLine(); continue
             }
             src.advance()
             src.skipWs()
+            val start2 = src.pos()
+            val mup1 = lineStart..<start2
             val s = src.readToEndOfLine()
             if (s.isBlank()) {
                 addError("malformed footnote")
             } else {
                 val (link, title) = extractLinkAndTitle(s)
-                footnotes[name] = Ref(name, link, title, Ref.Type.Footnote)
+                footnotes[name] =
+                    Ref(name, link, title, Ref.Type.Footnote, MarkupPlacement(listOf(mup1), start2..<src.pos()))
             }
         }
         rewind()
     }
 
-    private fun parseBlock(src: CharSource): BlockItem? {
+    private fun parseBlock(src: CharSource): BlockItem? = doParseBlock(src).also { lastBlock = it }
+
+    private fun doParseBlock(src: CharSource): BlockItem? {
 
         val start = src.pos()
 
-        while (src.isBlankLine() && !src.end) src.skipLine()
+        while (src.isBlankToEndOfLine() && !src.end)
+            src.skipLine()
         if (src.end) return null
 
         if (src.col != 0) throw RuntimeException("parseBlock must be called from line start: ${src.pos()}")
@@ -140,24 +148,87 @@ class Parser(
             // todo: dashed list level 0
         }
 
-        // by now it should be just indented or plain text
-        return when (src.current) {
-            ' ', '\t' -> {
-                src.skipWs()
-                BlockItem.Paragraph(
-                    if (listLevel > 0) listLevel else 1,
-                    parseContent(),
-                    MarkupPlacement(listOf(), start..<src.pos())
-                )
+        src.skipWs()
+        val next = src.nextInLine()
+        when (src.current) {
+            '-', '+', '*' -> if (next == ' ' || next == '\t') {
+                return extractUnorderedList()
             }
 
-            else -> BlockItem.Paragraph(
-                0,
-                parseContent(),
-                MarkupPlacement(listOf(), start..<src.pos())
-            )
+            in '0'..'9' -> {
+                tryExtractOrderedList()?.let { return it }
+            }
+
+            else -> {}
         }
+        // Now it should be a text block, probably idented:
+
+        return BlockItem.Paragraph(
+            currentIndentLevel(),
+            parseContent(),
+            MarkupPlacement(listOf(), start..<src.pos())
+        )
+
     }
+
+    private fun currentIndentLevel(): Int {
+        var col = 0
+        for (i in 0..<src.col) {
+            when (src.currentLine[i]) {
+                ' ' -> col++
+                '\t' -> col = ((col % tabSize) + 1) * tabSize
+                else -> break
+            }
+        }
+        return col / 4
+    }
+
+    private fun extractUnorderedList(): BlockItem.ListItem {
+        // it is called when current is a first char of a mark, so we save indent here:
+        val level = currentIndentLevel()
+        // skip mark and space
+        src.advance(2)
+        val start = src.pos()
+        return BlockItem.ListItem(
+            BlockItem.ListType.Bulleted, level, null, parseContent(), MarkupPlacement(
+                listOf(), // we don't treat list mark as a special character in cyntax coloring
+                src.rangeToCurrent(start)
+            )
+        )
+    }
+
+    private fun readPositiveInt(): Int? {
+        var result: Int? = null
+        while (src.current?.isDigit() == true) {
+            result = (result ?: 0) * 10 + (src.current!! - '0')
+            src.advance()
+        }
+        return result
+    }
+
+    private fun tryExtractOrderedList(): BlockItem.ListItem? =
+        src.mark {
+            val start = src.pos()
+            val level = currentIndentLevel()
+            val block = readPositiveInt()?.let { seq ->
+                if (src.current == '.') {
+                    val n = lastBlock?.let {
+                        if (it is BlockItem.ListItem && it.type == BlockItem.ListType.Ordered)
+                            it.number
+                        else null
+                    } ?: seq
+                    BlockItem.ListItem(
+                        BlockItem.ListType.Ordered, level, n, parseContent(),
+                        MarkupPlacement(
+                            listOf(),
+                            src.rangeToCurrent(start)
+                        )
+                    )
+                } else null
+            }
+            if (block == null) rewind()
+            block
+        }
 
     private fun readCodeBlock(start: Pos, ending: String): BlockItem.Code? =
         src.mark {
@@ -248,7 +319,7 @@ class Parser(
             if (src.eol) {
                 src.advance()
                 acc.append(' ')
-                if (src.isBlankLine()) break
+                if (src.skipSpacesToEnd()) break
             }
 
             when (src.current) {
@@ -290,10 +361,7 @@ class Parser(
                         // it could be filled with plain text, but only if the
                         // valid ref was extracted:
                         flush()
-                        result += InlineItem.Link(
-                            r,
-                            MarkupPlacement(listOf(), start..<src.pos())
-                        )
+                        result += InlineItem.Link(r)
                         start = src.pos()
                         continue@loop
                     }
@@ -325,12 +393,24 @@ class Parser(
         return src.mark {
             src.readBracedInLine('[', ']')?.let { name ->
                 // could be a footnote, inline or even external:
+                val bodyRange = startPosition + 1..<src.pos() - 1
+                val markupRanges = mutableListOf(
+                    startPosition..<startPosition + 1,
+                    src.pos() - 1..<src.pos()
+                )
+                val pos2 = src.pos()
                 when (src.current) {
                     '(' -> {
                         // inline
                         src.readBracedInLine('(', ')')?.let { source ->
                             extractLinkAndTitle(source).let {
-                                Ref(name, it.first, it.second, Ref.Type.Inline)
+                                Ref(
+                                    name, it.first, it.second, Ref.Type.Inline,
+                                    MarkupPlacement(
+                                        markupRanges + (pos2..<src.pos()),
+                                        bodyRange,
+                                    )
+                                )
                             }
                         }
                     }
@@ -338,7 +418,12 @@ class Parser(
                     '[' -> {
                         // footnote with different id
                         src.readBracedInLine('[', ']')?.let {
-                            footnotes[it]?.copy(name = name)
+                            footnotes[it]?.copy(
+                                name = name, placement = MarkupPlacement(
+                                    markupRanges + (pos2..<src.pos()),
+                                    bodyRange
+                                )
+                            )
                         }
                     }
 
@@ -346,7 +431,11 @@ class Parser(
                         footnotes[name] ?: linkResolver.invoke(name)
                             ?.let { extractLinkAndTitle(it) }
                             ?.let {
-                                Ref(name, it.first, it.second, Ref.Type.External)
+                                Ref(
+                                    name, it.first, it.second, Ref.Type.External, MarkupPlacement(
+                                        markupRanges, bodyRange
+                                    )
+                                )
                             } ?: run {
                             rewind()
                             null
@@ -366,7 +455,7 @@ class Parser(
         val parts = s.split(' ')
         val link: String
         val title: String?
-        if (parts.size == 2 && parts[1][0] == '"' && parts[1].last() == '"') {
+        if (parts.size == 2 && parts[1].length >= 2 && parts[1][0] == '"' && parts[1].last() == '"') {
             link = parts[0]
             title = parts[1].let { it.slice(1..<it.length - 1) }
         } else {

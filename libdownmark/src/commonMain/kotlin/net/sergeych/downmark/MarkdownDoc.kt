@@ -25,6 +25,6 @@ class MarkdownDoc internal constructor(
         operator fun invoke(
             text: String,
             linkResolver: (String)->String? = {null}
-        ): MarkdownDoc = Parser(text, linkResolver).parse()
+        ): MarkdownDoc = Parser(text, linkResolver=linkResolver).parse()
     }
 }

@@ -62,18 +62,6 @@ class ParserTest {
         assertEquals(Pos(0,0,0)..<Pos(1,7,11),
             ((r.body.first() as BlockItem.Paragraph).content.first() as InlineItem.Text).placement.body
         )
-//        val itext1 = ((r.body.first() as BlockItem.Paragraph).content[1] as InlineItem.Text)
-//        assertEquals("Text(I:world)", itext1.toString())
-//        assertEquals(Pos(0,8,8)..<Pos(0,13,13), itext1.placement.body)
-//
-//
-//        val p = itext1.placement
-//
-//        println(p.markups)
-//        assertEquals(p.markups[0], Pos(0,7, 7) ..< Pos(0,8,8))
-//        assertEquals(p.markups[1], Pos(0,13, 13) ..< Pos(0,14,14))
-//
-//        assertEquals(Pos(0, 8, 8),p.body!!.start)
     }
 
     @Test
@@ -83,6 +71,14 @@ class ParserTest {
             To _be 
             
             """.trimIndent())
+    }
+    @Test
+    fun testParseSimple2a1() {
+        // should not throw:
+         MarkdownDoc("""
+            |  - list line
+            |""".trimMargin())
+//        val i = md.blockAt<BlockItem.ListItem>(0)
     }
 
     @Test
@@ -227,4 +223,12 @@ class ParserTest {
         assertEquals(Ref.Type.External, l12.ref.type)
     }
 
+    @Test
+    fun textLinkAndTitleFail1() {
+        val src = """
+            [222]: lkj 
+            
+        """.trimIndent()
+        MarkdownDoc(src)
+    }
 }

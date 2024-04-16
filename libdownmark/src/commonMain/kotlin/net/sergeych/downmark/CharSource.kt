@@ -1,16 +1,16 @@
 package net.sergeych.downmark
 
-class CharSource(text: String) {
+class CharSource(private val text: String) {
 
     inner class Mark() {
-        val resetPos = pos()
+        val startPosition = pos()
 
         fun rewind() {
-            resetTo(resetPos)
+            resetTo(startPosition)
         }
 
         fun createError(text: String): SyntaxError =
-            SyntaxError(resetPos, text)
+            SyntaxError(startPosition, text)
 
     }
 
@@ -20,7 +20,7 @@ class CharSource(text: String) {
         if (it.isEmpty()) listOf("") else it
     }
 
-    private var currentLine = lines[0]
+    internal var currentLine = lines[0]
 
     private var row = 0
 
@@ -31,7 +31,7 @@ class CharSource(text: String) {
 
     fun pos(): Pos {
         _currentPos?.let { return it }
-        return makePos(row, col).also { _currentPos = it }
+        return posAt(row, col).also { _currentPos = it }
     }
 
 //    fun back(steps: Int = 1) {
@@ -193,13 +193,27 @@ class CharSource(text: String) {
      *
      * @return true if there was a consumed blank line ahead
      */
-    fun isBlankLine(): Boolean {
+    fun skipSpacesToEnd(): Boolean {
         while (!eol && !end) {
             if (current?.isWhitespace() != true) return false
             advance()
         }
         return true
     }
+
+    /**
+     * Check that from the current position to endo of line or end of data
+     * there are only spaces of there are no characters.
+     * __Does not advance current position__.
+     */
+    fun isBlankToEndOfLine(): Boolean {
+        if( end || eol ) return true
+        var c = col
+        while( c <= currentLine.length )
+            if( currentLine[c++].isWhitespace() != true ) return false
+        return true
+    }
+
 
     /**
      * Get previous char in the current line or null if there is no such char (start of line)
@@ -228,8 +242,36 @@ class CharSource(text: String) {
         result
     }
 
-    fun makePos(r: Int, c: Int): Pos =
-        Pos(r, c, offsetOfLine[r] + c)
+    fun posAt(r: Int, c: Int): Pos {
+        require( r >= 0 && r <= lines.size , {"row not in document bounds"})
+        if( r == lines.size )
+            require(c == 0, { "after the document end" })
+        else {
+            require( c >= 0 && c <= lines[r].length, {"ourside line $r boundaries ($c should be in ${0..lines[r].length}"})
+        }
+        return Pos(r, c, offsetOfLine[r] + c)
+    }
+
+    fun posAt(from: Pos, offset: Int): Pos {
+        // Actually, it could be faster to navigate from pos, bit not always
+        return posAt(from.offset + offset)
+    }
+
+    fun posAt(offset: Int): Pos {
+        var r = 0
+        while( r < lines.size-1 && offsetOfLine[r+1] < offset ) r++
+        val c = offset - offsetOfLine[r]
+        return Pos(r, c, offset)
+    }
+
+    @Suppress("unused")
+    fun charAt(pos: Pos): Char = text[pos.offset]
+
+    @Suppress("unused")
+    fun slice(range: OpenEndRange<Pos>): String = text.slice(range.start.offset ..< range.endExclusive.offset)
+
+    @Suppress("unused")
+    fun slice(range: ClosedRange<Pos>): String = text.slice(range.start.offset ..< range.endInclusive.offset)
 
 
     /**
@@ -242,7 +284,7 @@ class CharSource(text: String) {
         var r = row
         do {
             val i = lines[r].indexOf(pattern, offset)
-            if (i >= 0) return makePos(r, i)
+            if (i >= 0) return posAt(r, i)
             r++
             offset = 0
             if (r < lines.size) {
@@ -279,6 +321,8 @@ class CharSource(text: String) {
             null
         }
     }
+
+    fun rangeToCurrent(start: Pos): OpenEndRange<Pos> = start ..< pos()
 
     init {
         if (text.isEmpty())

@@ -217,6 +217,7 @@ class Parser(
                             it.number
                         else null
                     } ?: seq
+                    src.advance()
                     BlockItem.ListItem(
                         BlockItem.ListType.Ordered, level, n, parseContent(),
                         MarkupPlacement(

@@ -73,10 +73,21 @@ class ParserTest {
             """.trimIndent())
     }
     @Test
-    fun testParseSimple2a1() {
+    fun testParsBug2a1() {
         // should not throw:
          MarkdownDoc("""
             |  - list line
+            |""".trimMargin())
+//        val i = md.blockAt<BlockItem.ListItem>(0)
+    }
+
+    @Test
+    fun testParsBug2a2() {
+        // should not throw:
+         MarkdownDoc("""
+            |  # Some title
+            |     
+            |     
             |""".trimMargin())
 //        val i = md.blockAt<BlockItem.ListItem>(0)
     }

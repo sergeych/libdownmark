@@ -209,7 +209,7 @@ class CharSource(private val text: String) {
     fun isBlankToEndOfLine(): Boolean {
         if( end || eol ) return true
         var c = col
-        while( c <= currentLine.length )
+        while( c < currentLine.length )
             if( currentLine[c++].isWhitespace() != true ) return false
         return true
     }

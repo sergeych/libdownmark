@@ -242,4 +242,15 @@ class ParserTest {
         """.trimIndent()
         MarkdownDoc(src)
     }
+
+    @Test
+    fun codeBlockBug1() {
+        MarkdownDoc("""
+            # 1
+            
+            ~~~ 
+            
+            # 11
+        """.trimIndent())
+    }
 }

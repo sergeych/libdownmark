@@ -176,7 +176,10 @@ class CharSource(private val text: String) {
      * @return the retrieved text which could be empty.
      */
     fun readToEndOfLine(): String {
-        return if (eol) "" else {
+        return if (eol) {
+            advance()
+            ""
+        } else {
             currentLine.substring(col).also {
                 row++
                 col = 0

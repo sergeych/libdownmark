@@ -323,6 +323,10 @@ class Parser(
                 if (src.skipSpacesToEnd()) break
             }
 
+            if( src.col == 0 && src.currentLine.startsWith("- ")) {
+                break
+            }
+
             when (src.current) {
                 '\\' -> { // escapes
                     when (val n = src.nextInLine()) {

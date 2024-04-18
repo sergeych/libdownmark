@@ -253,4 +253,14 @@ class ParserTest {
             # 11
         """.trimIndent())
     }
+
+    @Test
+    fun listBug1Test() {
+        val md = MarkdownDoc("""
+            - l1
+            - l2
+        """.trimIndent())
+        assertIs<BlockItem.ListItem>(md.body[0])
+        assertIs<BlockItem.ListItem>(md.body[1])
+    }
 }

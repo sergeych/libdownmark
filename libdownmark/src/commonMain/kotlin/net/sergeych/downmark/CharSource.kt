@@ -71,6 +71,12 @@ class CharSource(private val text: String) {
         }
     }
 
+    /**
+     * return the current char and advance
+     */
+    fun pop(): Char? = current?.also { advance() }
+
+
     fun advance(steps: Int = 1) {
         val dir: Int
         val limit: Int
@@ -95,8 +101,7 @@ class CharSource(private val text: String) {
                 if (col == 0) {
                     if (row == 0) throw IndexOutOfBoundsException("advance back before the start")
                     col = lines[--row].length
-                }
-                else col--
+                } else col--
             }
         }
         sync()
@@ -121,7 +126,7 @@ class CharSource(private val text: String) {
         return this
     }
 
-    fun <T> mark(f: Mark.() -> T): T = with(createMark()) { f() }
+    inline fun <reified T> mark(f: Mark.() -> T): T = with(createMark()) { f() }
 
     /**
      * Check that source matches any <prefix><non-space>, in which case
@@ -144,6 +149,48 @@ class CharSource(private val text: String) {
             }
         }
     }
+
+    fun isAtStart() = pos().offset == 0
+
+
+    /**
+     * Style span start prefix detection. Prev char should not exist or be a space, next char
+     * should not be a space. The current position is not changed.
+     * @return found prefix or null
+     */
+    fun isStartOf(vararg prefixes: String): String? {
+        // 1. we at start or after a space:
+        if( col == 0 || currentLine[col-1].isWhitespace()) {
+            // 2. there is a prefix
+            for( x in prefixes ) {
+                if(currentLine.startsWith(x, col)) {
+                    // found it
+                    return x
+                }
+            }
+        }
+        return null
+    }
+
+    fun findEnd(sample: String, limit: Pos): Pos? = mark {
+        var found: Pos? = null
+        while (pos() < limit) {
+            if (currentLine.startsWith(sample, col)) {
+                if( currentLine.length > col+sample.length) {
+                    val next = currentLine[col+sample.length]
+                    if( next.isWhitespace() || next == '.') {
+                        found = pos()
+                        break
+                    }
+                }
+            }
+            advance()
+        }
+        found.also {
+            rewind()
+        }
+    }
+
 
     /**
      * If the expected value is at the current position, advance past it.
@@ -210,12 +257,14 @@ class CharSource(private val text: String) {
      * __Does not advance current position__.
      */
     fun isBlankToEndOfLine(): Boolean {
-        if( end || eol ) return true
+        if (end || eol) return true
         var c = col
-        while( c < currentLine.length )
-            if( currentLine[c++].isWhitespace() != true ) return false
+        while (c < currentLine.length)
+            if (currentLine[c++].isWhitespace() != true) return false
         return true
     }
+
+    fun currentLineIndent(tabSize: Int = 2): Int = currentLine.indentExpandingTabs(tabSize)
 
 
     /**
@@ -246,11 +295,13 @@ class CharSource(private val text: String) {
     }
 
     fun posAt(r: Int, c: Int): Pos {
-        require( r >= 0 && r <= lines.size , {"row not in document bounds"})
-        if( r == lines.size )
+        require(r >= 0 && r <= lines.size, { "row not in document bounds" })
+        if (r == lines.size)
             require(c == 0, { "after the document end" })
         else {
-            require( c >= 0 && c <= lines[r].length, {"ourside line $r boundaries ($c should be in ${0..lines[r].length}"})
+            require(
+                c >= 0 && c <= lines[r].length,
+                { "ourside line $r boundaries ($c should be in ${0..lines[r].length}" })
         }
         return Pos(r, c, offsetOfLine[r] + c)
     }
@@ -262,7 +313,7 @@ class CharSource(private val text: String) {
 
     fun posAt(offset: Int): Pos {
         var r = 0
-        while( r < lines.size-1 && offsetOfLine[r+1] < offset ) r++
+        while (r < lines.size - 1 && offsetOfLine[r + 1] < offset) r++
         val c = offset - offsetOfLine[r]
         return Pos(r, c, offset)
     }
@@ -271,10 +322,10 @@ class CharSource(private val text: String) {
     fun charAt(pos: Pos): Char = text[pos.offset]
 
     @Suppress("unused")
-    fun slice(range: OpenEndRange<Pos>): String = text.slice(range.start.offset ..< range.endExclusive.offset)
+    fun slice(range: OpenEndRange<Pos>): String = text.slice(range.start.offset..<range.endExclusive.offset)
 
     @Suppress("unused")
-    fun slice(range: ClosedRange<Pos>): String = text.slice(range.start.offset ..< range.endInclusive.offset)
+    fun slice(range: ClosedRange<Pos>): String = text.slice(range.start.offset..<range.endInclusive.offset)
 
 
     /**
@@ -325,7 +376,7 @@ class CharSource(private val text: String) {
         }
     }
 
-    fun rangeToCurrent(start: Pos): OpenEndRange<Pos> = start ..< pos()
+    fun rangeToCurrent(start: Pos): OpenEndRange<Pos> = start..<pos()
 
     init {
         if (text.isEmpty())

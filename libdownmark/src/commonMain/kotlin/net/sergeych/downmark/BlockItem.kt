@@ -6,6 +6,7 @@ typealias Row = List<List<InlineItem>>
 sealed class BlockItem : MarkupItem {
 
     open val content: List<InlineItem> = listOf()
+    open val indentLevel: Int? = null
 
     data class Paragraph(
         val indent: Int,
@@ -38,6 +39,7 @@ sealed class BlockItem : MarkupItem {
     data class Code(
         val text: String,
         val land: String? = null,
+        override val indentLevel: Int? = null,
         override val placement: MarkupPlacement,
     ) : BlockItem() {
         override val content = listOf(InlineItem.Code(text, placement))

@@ -24,7 +24,7 @@ class ParserContextText {
             |    world
             |    
             |    !
-        """.trimMargin()).parseBlock()
+        """.trimMargin()).parseBlock().first()
         assertIs<BlockItem.Code>(b)
         assertEquals("""
             hello
@@ -44,7 +44,7 @@ class ParserContextText {
             |           world
             |    
             |           !
-        """.trimMargin(), 5, 7).parseBlock()
+        """.trimMargin(), 5, 7).parseBlock().first()
         assertIs<BlockItem.Code>(b)
         assertEquals("""
             hello
@@ -59,13 +59,13 @@ class ParserContextText {
 
 
     @Test
-    fun testParseCodeBlock4() {
+    fun testParseSimpleText() {
         val b = ParserContext("""
             |    hello
             |    world
             |    
             |    !
-        """.trimMargin(),1,3).parseBlock()
+        """.trimMargin(),1,3).parseBlock().first()
         assertIs<BlockItem.Paragraph>(b)
         assertEquals("""
             hello world

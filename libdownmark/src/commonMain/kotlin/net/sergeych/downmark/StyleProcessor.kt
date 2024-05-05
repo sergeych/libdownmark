@@ -1,6 +1,6 @@
 package net.sergeych.downmark
 
-class StyleProcessor(val src: CharSource,val end: Pos) {
+class StyleProcessor(val src: CharSource, val end: Pos) {
 
     data class Style(
         val isItalic: Boolean = false,
@@ -9,24 +9,22 @@ class StyleProcessor(val src: CharSource,val end: Pos) {
     )
 
     inner class MarkupDetector(vararg val symbols: String, val styler: (Style) -> Style) {
-        var current: String?=null
-        private set
+        var current: String? = null
+            private set
 
         val markupPlacements = mutableListOf<OpenEndRange<Pos>>()
 
         fun detectChange(): Boolean {
-            return if( current != null ) {
+            return if (current != null) {
                 // detect end
                 TODO()
-            }
-            else {
+            } else {
                 // detect start
                 src.isStartOf(*symbols)?.let { p ->
                     if (src.findEnd(p, end) != null) {
                         current = p
                         true
-                    }
-                    else false
+                    } else false
                 } ?: false
             }
         }
@@ -64,16 +62,17 @@ class StyleProcessor(val src: CharSource,val end: Pos) {
             }
 
             // style mark
-            for( m in markups) {
-                if( m.detectChange() ) {
+            for (m in markups) {
+                if (m.detectChange()) {
                     // start or stop?
                     // start: flush existing style & add markup & reset start
                     // stop: flush existing style & use markup to form a block & reset start
                 }
 
-            }            }
-
+            }
         }
 
-
     }
+
+
+}

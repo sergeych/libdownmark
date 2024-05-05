@@ -1,5 +1,10 @@
 package net.sergeych.downmark
 
+data class ListStart(
+    val type: BlockItem.ListType,
+    val number: Number? = null,
+)
+
 class ParserContext(
     val src: CharSource,
     /**
@@ -65,13 +70,27 @@ class ParserContext(
                     continue
                 }
 
+                // Outdent: this indirection level is done
                 if (src.col < ibase) break
 
-                if (src.col < bbase) {
-                    // should be a line item same level
+                // todo: Check this is a list block start
+                detectListStart()?.let { s ->
+                    // could be this level or next. If next, we should
+                    // parse the rest as an inner content!
+                    if (src.col < ibase) {
+                        // Same indirection level
+                        yield(
+                            BlockItem.ListItem(
+                                s.type,
+                                level,
+                                s.number,
+                                styledContent()
+                            )
+                        )
+                    }
                 }
 
-                // start at bbase:
+
                 // todo: fenced block
                 // todo: list
                 // todo: quite
@@ -79,7 +98,7 @@ class ParserContext(
                 // todo: line
 
                 // otherwise, it's a paragraph
-                yieldAll(readOther())
+                TODO()
             }
         }
     }
@@ -88,64 +107,113 @@ class ParserContext(
      * Read content from current pos which should be the first pos of the content_
      * until the end of the block (somehow) and parse it.
      */
-    private fun readContent(): List<InlineItem> {
-        val result = mutableListOf<BlockItem>()
-        var start = src.pos()
-        val acc = StringBuilder(src.readToEndOfLine())
-
-        /*
-         * The logic is:
-         *
-         * 1. addCurrent line to style processing
-         * 2. get next line.
-         * 3. if it is the end of some type, return
-         *    collected styles
-         *
-         *    otherwise, add the line to style processing.
-         */
-
-        fun flush() {
-            if (acc.isNotEmpty()) {
-                result += BlockItem.Paragraph(
-                    level, parseInlines(
-                        acc.toString()), MarkupPlacement(
-                            listOf(), start..<src.pos()
-                        )
-                    )
-                )
-                acc.toString()
-                start = src.pos()
-            }
-        }
-        do {
-
-            // paragraph ends:
-            if (src.end) break
-            if (src.isBlankToEndOfLine()) break
-            // outdent text: end
-            val indent = src.currentLineIndent()
-            if (indent < bbase) break
-
-            /* now it can be
-                - Start of the list item, this level or +1, outtend already caused
-                exit from the function (above).
-
-                - All other is a continuation.
-             */
-            detectListStart()?.let { (i, t) ->
-            }
-
-        } while (true)
-        return result
-    }
-
+//    private fun readContent(): List<InlineItem> {
+//        val result = mutableListOf<BlockItem>()
+//        var start = src.pos()
+//        val acc = StringBuilder(src.readToEndOfLine())
+//
+//        /*
+//         * The logic is:
+//         *
+//         * 1. addCurrent line to style processing
+//         * 2. get next line.
+//         * 3. if it is the end of some type, return
+//         *    collected styles
+//         *
+//         *    otherwise, add the line to style processing.
+//         */
+//
+//        fun flush() {
+//            if (acc.isNotEmpty()) {
+//                result += BlockItem.Paragraph(
+//                    level, parseInlines(
+//                        acc.toString()), MarkupPlacement(
+//                            listOf(), start..<src.pos()
+//                        )
+//                    )
+//                )
+//                acc.toString()
+//                start = src.pos()
+//            }
+//        }
+//        do {
+//
+//            // paragraph ends:
+//            if (src.end) break
+//            if (src.isBlankToEndOfLine()) break
+//            // outdent text: end
+//            val indent = src.currentLineIndent()
+//            if (indent < bbase) break
+//
+//            /* now it can be
+//                - Start of the list item, this level or +1, outtend already caused
+//                exit from the function (above).
+//
+//                - All other is a continuation.
+//             */
+//            detectListStart()?.let { (i, t) ->
+//            }
+//
+//        } while (true)
+//        return result
+//    }
+//
 
     fun parseList(): Sequence<BlockItem.ListItem>? {
         return null
     }
 
-    private fun detectListStart(): Pair<Int, BlockItem.ListType>? {
-        TODO()
+    /**
+     * If src points to the list start, detect list type and leacve the pointer
+     * at the start of the list content.
+     *
+     */
+    private fun detectListStart(): ListStart? {
+        val m = src.createMark()
+        src.skipWs()
+        return when (src.current) {
+            '-', '*' -> {
+                // dashed/bulleted list?
+                if (src.current == ' ') {
+                    src.advance()
+                    ListStart(BlockItem.ListType.Dashed)
+                } else {
+                    m.rewind()
+                    null
+                }
+            }
+
+            '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
+                // Ordered list?
+                readPositiveInt()?.let { number ->
+                    if (src.current == '.') {
+                        src.advance()
+                        if (src.current == ' ') src.advance()
+                        ListStart(BlockItem.ListType.Ordered, number)
+                    } else null
+                } ?: run { m.rewind(); null }
+            }
+
+            else -> {
+                m.rewind()
+                null
+            }
+        }
+    }
+
+    /**
+     * Read positive integer from current position and leave src at the next
+     * non-numeric char. Does not change position if there is no number
+     */
+    private fun readPositiveInt(): Int? {
+        var n = 0
+        var detected = true
+        while (src.current?.isDigit() == true) {
+            n = n * 10 + src.current!!.digitToInt()
+            src.advance()
+            detected = true
+        }
+        return if (detected) n else null
     }
 
     fun parseInlines(str: String): List<InlineItem> {
